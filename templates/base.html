@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AssessAI - AI Powered Assessment Generator & Automated Evaluation Platform">
+    <title>{% block title %}AssessAI Portal{% endblock %}</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome 6 CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Ambient Background Blobs -->
+    <div class="bg-blur-container" aria-hidden="true">
+        <div class="blur-blob blob-1"></div>
+        <div class="blur-blob blob-2"></div>
+    </div>
+
+    <!-- Navigation Header -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('index') }}" class="brand-link">
+                <img src="{{ url_for('static', filename='assets/logo.jpg') }}" alt="AssessAI" class="brand-logo">
+                <div class="brand-text">
+                    <h1>Assess<span>AI</span></h1>
+                </div>
+            </a>
+
+            <ul class="nav-menu">
+                {% if session.get('role') == 'teacher' %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('upload_materials') }}" class="{% if request.endpoint == 'upload_materials' %}active{% endif %}">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Study Material
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('question_paper') }}" class="{% if request.endpoint == 'question_paper' %}active{% endif %}">
+                            <i class="fa-solid fa-file-signature"></i> Question Paper
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('teacher_analytics') }}" class="{% if request.endpoint == 'teacher_analytics' %}active{% endif %}">
+                            <i class="fa-solid fa-chart-pie"></i> Student Results
+                        </a>
+                    </li>
+                    <li class="nav-user">
+                        <span class="user-badge badge-teacher">Educator</span>
+                        <span>{{ session.get('user_name', 'Teacher') }}</span>
+                        <a href="{{ url_for('logout') }}" class="btn-logout" title="Sign Out"><i class="fa-solid fa-right-from-bracket"></i></a>
+                    </li>
+                {% elif session.get('role') == 'student' %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('student_test') }}" class="active">
+                            <i class="fa-solid fa-pen-to-square"></i> Assessment Portal
+                        </a>
+                    </li>
+                    <li class="nav-user">
+                        <span class="user-badge badge-student">Student</span>
+                        <span>{{ session.get('student_name', 'Student') }}</span>
+                        <a href="{{ url_for('logout') }}" class="btn-logout" title="Sign Out"><i class="fa-solid fa-right-from-bracket"></i></a>
+                    </li>
+                {% else %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('teacher_login') }}" class="{% if request.endpoint == 'teacher_login' %}active{% endif %}">
+                            <i class="fa-solid fa-chalkboard-user"></i> Educator Login
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('student_login') }}" class="{% if request.endpoint == 'student_login' %}active{% endif %}">
+                            <i class="fa-solid fa-user-graduate"></i> Student Login
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Flash Notifications -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-container">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        <i class="fa-solid {% if category == 'success' %}fa-circle-check{% elif category == 'error' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content Body -->
+    <main class="main-wrapper">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
