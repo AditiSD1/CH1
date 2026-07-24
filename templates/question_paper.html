@@ -109,9 +109,16 @@
                     </div>
                 </div>
 
-                <button id="btnCopyJoinLink" class="btn-secondary" style="width: 100%; margin-top: 1rem; justify-content: center;" data-url="{{ test_url }}">
-                    <i class="fa-solid fa-copy"></i> Copy Join Link
-                </button>
+                <!-- Visible & Copyable Student Join Link Input Box -->
+                <div style="margin-top: 1rem; text-align: left;">
+                   <label style="font-size: 0.78rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">Direct Student Join Link:</label>
+                     <div style="display: flex; gap: 8px;">
+                         <input type="text" id="testUrlInput" value="{{ test_url }}" readonly style="width: 100%; background: #0a0e17; border: 1px solid var(--bg-card-border); color: #22d3ee; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 0.82rem; font-family: monospace;" onclick="this.select();">
+                         <button type="button" class="btn-secondary" style="white-space: nowrap; padding: 8px 14px; font-size: 0.82rem;" onclick="copyTestUrl()">
+                          <i class="fa-solid fa-copy"></i> Copy
+                         </button>
+                     </div>
+                </div>
             </div>
 
             <!-- Schedule Form Card -->
@@ -169,4 +176,18 @@
         </a>
     </div>
 {% endif %}
+<script>
+    function copyTestUrl() {
+        var input = document.getElementById('testUrlInput');
+        if (!input) return;
+        input.select();
+        input.setSelectionRange(0, 99999);
+        try {
+            document.execCommand('copy');
+            alert('Student Join Link copied to clipboard!\n\n' + input.value);
+        } catch (err) {
+            alert('Link selected! Press Ctrl+C to copy:\n\n' + input.value);
+        }
+    }
+</script>
 {% endblock %}
