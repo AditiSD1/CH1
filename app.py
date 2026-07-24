@@ -434,7 +434,7 @@ def teacher_register():
     session['user_email'] = email
     session['department'] = department
 
-    flash('Educator Account registered successfully in SQLite database!', 'success')
+    flash('Educator Account registered successfully!', 'success')
     return redirect(url_for('upload_materials'))
 
 # ----------------------------------------------
@@ -482,7 +482,7 @@ def upload_materials():
             db.session.add(new_mat)
             db.session.commit()
 
-            flash(f'Study material "{filename}" uploaded and parsed into SQLite database ({page_count} pages analyzed)!', 'success')
+            flash(f'Study material "{filename}" uploaded and parsed successfully!', 'success')
             return redirect(url_for('upload_materials'))
 
     materials = Material.query.filter_by(user_id=user_id).order_by(Material.uploaded_at.desc()).all()
@@ -567,7 +567,7 @@ def generate_paper():
 
     db.session.commit()
 
-    flash(f'Question Paper generated and saved to SQLite Database!', 'success')
+    flash(f'Question Paper generated successfully!', 'success')
     return redirect(url_for('question_paper'))
 
 # ----------------------------------------------------------
@@ -674,9 +674,261 @@ def schedule_test():
     scheduled.passcode = request.form.get('passcode', 'AI-2026').strip().upper()
 
     db.session.commit()
-    flash('Test schedule saved in database! Students can scan QR code to join.', 'success')
+    flash('Test schedule updated successfully! Students can scan QR code to join.', 'success')
     return redirect(url_for('question_paper'))
 
+# ------------------------------------------------------------------------------
+# PAGE 4: STUDENT LOGIN & SIGN UP
+# ------------------------------------------------------------------------------
+@app.route('/student/login', methods=['GET', 'POST'])
+def student_login():
+    code_param = request.args.get('code', '')
+
+    scheduled = ScheduledTest.query.first()
+    test_info = {
+        'passcode': scheduled.passcode if scheduled else (code_param or 'AI-2026'),
+        'title': scheduled.test_title if scheduled else 'AI Assessment Test',
+        'date': scheduled.test_date if scheduled else datetime.datetime.now().strftime('%Y-%m-%d'),
+        'time': scheduled.test_time if scheduled else '10:00 AM',
+        'duration_mins': scheduled.duration_mins if scheduled else 30
+    }
+
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        passcode = request.form.get('passcode', '').strip().upper()
+        password = request.form.get('password', '').strip()
+
+        user = User.query.filter_by(email=email, role='student').first()
+        if user and check_password_hash(user.password_hash, password):
+            session['user_id'] = user.id
+            session['role'] = 'student'
+            session['student_email'] = email
+            session['student_name'] = user.name
+            session['student_roll'] = user.roll_no or 'STU-2026'
+            session['test_passcode'] = passcode
+            flash(f'Welcome, {user.name}! Accessing your test portal.', 'success')
+            return redirect(url_for('student_test'))
+        else:
+            flash('Invalid student credentials. Please check details or Sign Up.', 'error')
+
+    return render_template('student_login.html', code_param=code_param, scheduled_test=test_info)
+
+@app.route('/student/register', methods=['POST'])
+def student_register():
+    name = request.form.get('name', '').strip()
+    roll_no = request.form.get('roll_no', '').strip().upper()
+    email = request.form.get('email', '').strip().lower()
+    passcode = request.form.get('passcode', '').strip().upper()
+    password = request.form.get('password', '').strip()
+
+    if not name or not email or not password or not passcode:
+        flash('Please complete all fields to sign up.', 'error')
+        return redirect(url_for('student_login'))
+
+    existing = User.query.filter_by(email=email).first()
+    if existing:
+        flash('An account with this email already exists. Please log in.', 'error')
+        return redirect(url_for('student_login'))
+
+    formatted_roll = roll_no if roll_no else f"STU-2026-{uuid.uuid4().hex[:4].upper()}"
+
+    new_student = User(
+        name=name,
+        roll_no=formatted_roll,
+        email=email,
+        password_hash=generate_password_hash(password),
+        role='student'
+    )
+    db.session.add(new_student)
+    db.session.commit()
+
+    session['user_id'] = new_student.id
+    session['role'] = 'student'
+    session['student_email'] = email
+    session['student_name'] = name
+    session['student_roll'] = formatted_roll
+    session['test_passcode'] = passcode
+
+    flash('Student account registered successfully! Ready for your test.', 'success')
+    return redirect(url_for('student_test'))
+
+# ------------------------------------------------------------------------------
+# PAGE 5: STUDENT TEST & INSTANT RESULTS
+# ------------------------------------------------------------------------------
+@app.route('/student/test', methods=['GET', 'POST'])
+def student_test():
+    if session.get('role') != 'student':
+        flash('Please log in as a student to access the test portal.', 'error')
+        return redirect(url_for('student_login'))
+
+    paper = QuestionPaper.query.order_by(QuestionPaper.created_at.desc()).first()
+    if not paper:
+        return render_template('student_test.html', paper=None, attempt=None, submitted=False)
+
+    paper_dict = {
+        'id': paper.id,
+        'title': paper.title,
+        'subject': paper.subject,
+        'total_marks': paper.total_marks,
+        'duration_mins': paper.duration_mins,
+        'questions': paper.questions
+    }
+
+    student_email = session.get('student_email')
+    existing_attempt = StudentAttempt.query.filter_by(student_email=student_email, status='Attempted').first()
+
+    attempt_dict = None
+    if existing_attempt:
+        attempt_dict = {
+            'id': existing_attempt.id,
+            'student_name': existing_attempt.student_name,
+            'student_email': existing_attempt.student_email,
+            'roll_no': existing_attempt.roll_no,
+            'score': existing_attempt.score,
+            'total_marks': existing_attempt.total_marks,
+            'percentage': existing_attempt.percentage,
+            'grade': existing_attempt.grade,
+            'submitted_at': existing_attempt.submitted_at,
+            'answers': existing_attempt.answers,
+            'feedback': existing_attempt.feedback
+        }
+
+    if request.method == 'POST':
+        score = 0
+        total_possible = paper.total_marks
+        user_answers = {}
+
+        for q in paper.questions:
+            q_id = q['id']
+            user_val = request.form.get(f"q_{q_id}", '').strip()
+            user_answers[q_id] = user_val
+
+            if q['type'] == 'mcq':
+                if user_val.lower() == q['answer'].lower():
+                    score += q['marks']
+            elif q['type'] == 'descriptive':
+                match_count = 0
+                for kw in q.get('keywords', []):
+                    if kw.lower() in user_val.lower():
+                        match_count += 1
+                if match_count >= 2:
+                    score += q['marks']
+                elif match_count >= 1:
+                    score += int(q['marks'] * 0.6)
+                elif len(user_val) > 15:
+                    score += int(q['marks'] * 0.4)
+
+        percentage = round((score / total_possible) * 100, 1) if total_possible > 0 else 0
+        grade = 'A+' if percentage >= 85 else 'A' if percentage >= 70 else 'B' if percentage >= 55 else 'C' if percentage >= 40 else 'F'
+        feedback = f"Automated Evaluation Complete. Score: {score}/{total_possible} ({percentage}%)."
+
+        if existing_attempt:
+            existing_attempt.score = score
+            existing_attempt.percentage = percentage
+            existing_attempt.grade = grade
+            existing_attempt.answers_json = json.dumps(user_answers)
+            existing_attempt.submitted_at = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+            existing_attempt.feedback = feedback
+            db.session.commit()
+            attempt_record = existing_attempt
+        else:
+            new_attempt = StudentAttempt(
+                student_id=session.get('user_id'),
+                student_name=session.get('student_name', 'Student'),
+                student_email=student_email,
+                roll_no=session.get('student_roll', 'STU-2026'),
+                paper_id=paper.id,
+                status='Attempted',
+                score=score,
+                total_marks=total_possible,
+                percentage=percentage,
+                grade=grade,
+                submitted_at=datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),
+                answers_json=json.dumps(user_answers),
+                feedback=feedback
+            )
+            db.session.add(new_attempt)
+            db.session.commit()
+            attempt_record = new_attempt
+
+        attempt_dict = {
+            'id': attempt_record.id,
+            'student_name': attempt_record.student_name,
+            'student_email': attempt_record.student_email,
+            'roll_no': attempt_record.roll_no,
+            'score': attempt_record.score,
+            'total_marks': attempt_record.total_marks,
+            'percentage': attempt_record.percentage,
+            'grade': attempt_record.grade,
+            'submitted_at': attempt_record.submitted_at,
+            'answers': attempt_record.answers,
+            'feedback': attempt_record.feedback
+        }
+
+        flash('Test submitted successfully!', 'success')
+        return render_template('student_test.html', paper=paper_dict, attempt=attempt_dict, submitted=True)
+
+    return render_template('student_test.html', paper=paper_dict, attempt=attempt_dict, submitted=(attempt_dict is not None))
+
+# ------------------------------------------------------------------------------
+# PAGE 6: TEACHER ANALYTICS & STUDENT PROGRESS TRACKING
+# ------------------------------------------------------------------------------
+@app.route('/teacher/analytics')
+def teacher_analytics():
+    if session.get('role') != 'teacher':
+        flash('Please log in as an educator to access analytics.', 'error')
+        return redirect(url_for('teacher_login'))
+
+    attempts = StudentAttempt.query.order_by(StudentAttempt.submitted_at.desc()).all()
+    student_users = User.query.filter_by(role='student').all()
+
+    total_students = len(student_users) if len(student_users) > len(attempts) else len(attempts)
+    attempted_students = [a for a in attempts if a.status == 'Attempted']
+    attempted_count = len(attempted_students)
+    pending_count = max(0, total_students - attempted_count)
+
+    avg_score = round(sum(a.percentage for a in attempted_students) / attempted_count, 1) if attempted_count > 0 else 0.0
+
+    paper = QuestionPaper.query.order_by(QuestionPaper.created_at.desc()).first()
+    paper_title = paper.title if paper else 'No Active Question Paper'
+
+    formatted_attempts = [
+        {
+            'id': a.id,
+            'student_name': a.student_name,
+            'student_email': a.student_email,
+            'roll_no': a.roll_no,
+            'status': a.status,
+            'score': a.score,
+            'total_marks': a.total_marks,
+            'percentage': a.percentage,
+            'grade': a.grade,
+            'submitted_at': a.submitted_at,
+            'feedback': a.feedback
+        } for a in attempts
+    ]
+
+    return render_template(
+        'teacher_analytics.html',
+        attempts=formatted_attempts,
+        total_students=total_students,
+        attempted_count=attempted_count,
+        pending_count=pending_count,
+        avg_score=avg_score,
+        paper_title=paper_title
+    )
+
+# ------------------------------------------------------------------------------
+# LOGOUT
+# ------------------------------------------------------------------------------
+@app.route('/logout')
+def logout():
+    role = session.get('role')
+    session.clear()
+    flash('Logged out successfully.', 'info')
+    if role == 'student':
+        return redirect(url_for('student_login'))
+    return redirect(url_for('teacher_login'))
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
