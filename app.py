@@ -367,6 +367,317 @@ def create_pdf_question_paper(paper):
     buffer.seek(0)
     return buffer
 
+# ==============================================================================
+# ROUTES
+# ==============================================================================
+
+@app.route('/')
+def index():
+    if session.get('role') == 'teacher':
+        return redirect(url_for('upload_materials'))
+    elif session.get('role') == 'student':
+        return redirect(url_for('student_test'))
+    return redirect(url_for('teacher_login'))
+
+# -----------------------------------------------
+# PAGE 1: TEACHER LOGIN & SIGN UP
+# -----------------------------------------------
+@app.route('/teacher/login', methods=['GET', 'POST'])
+def teacher_login():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '').strip()
+
+        user = User.query.filter_by(email=email, role='teacher').first()
+        if user and check_password_hash(user.password_hash, password):
+            session['user_id'] = user.id
+            session['role'] = 'teacher'
+            session['user_name'] = user.name
+            session['user_email'] = user.email
+            session['department'] = user.department or 'General'
+            flash(f'Welcome back, {user.name}!', 'success')
+            return redirect(url_for('upload_materials'))
+        else:
+            flash('Invalid educator credentials. Please check email/password or Sign Up.', 'error')
+
+    return render_template('teacher_login.html')
+
+@app.route('/teacher/register', methods=['POST'])
+def teacher_register():
+    name = request.form.get('name', '').strip()
+    department = request.form.get('department', '').strip()
+    email = request.form.get('email', '').strip().lower()
+    password = request.form.get('password', '').strip()
+
+    if not name or not email or not password:
+        flash('Please complete all fields to sign up.', 'error')
+        return redirect(url_for('teacher_login'))
+
+    existing = User.query.filter_by(email=email).first()
+    if existing:
+        flash('An account with this email already exists. Please log in.', 'error')
+        return redirect(url_for('teacher_login'))
+
+    new_user = User(
+        name=name,
+        department=department,
+        email=email,
+        password_hash=generate_password_hash(password),
+        role='teacher'
+    )
+    db.session.add(new_user)
+    db.session.commit()
+
+    session['user_id'] = new_user.id
+    session['role'] = 'teacher'
+    session['user_name'] = name
+    session['user_email'] = email
+    session['department'] = department
+
+    flash('Educator Account registered successfully in SQLite database!', 'success')
+    return redirect(url_for('upload_materials'))
+
+# ----------------------------------------------
+# PAGE 2: UPLOAD & MANAGE STUDY MATERIALS (PYPDF)
+# -----------------------------------------------
+@app.route('/teacher/upload', methods=['GET', 'POST'])
+def upload_materials():
+    if session.get('role') != 'teacher':
+        flash('Please log in as an educator to access this page.', 'error')
+        return redirect(url_for('teacher_login'))
+
+    user_id = session.get('user_id')
+
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            flash('No file selected.', 'error')
+            return redirect(request.url)
+        
+        file = request.files['file']
+        if file.filename == '':
+            flash('No file selected.', 'error')
+            return redirect(request.url)
+
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+
+            extracted_text, page_count, topics = process_pdf_material(filepath, filename)
+
+            ext = filename.rsplit('.', 1)[1].upper()
+            size_mb = round(os.path.getsize(filepath) / (1024 * 1024), 2)
+            file_size_str = f"{size_mb if size_mb > 0 else '0.3'} MB"
+
+            new_mat = Material(
+                user_id=user_id,
+                filename=filename,
+                file_type=f"{ext} Document",
+                file_size=file_size_str,
+                page_count=page_count,
+                topics_json=json.dumps(topics),
+                extracted_text=extracted_text[:3000],
+                uploaded_at=datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+            )
+            db.session.add(new_mat)
+            db.session.commit()
+
+            flash(f'Study material "{filename}" uploaded and parsed into SQLite database ({page_count} pages analyzed)!', 'success')
+            return redirect(url_for('upload_materials'))
+
+    materials = Material.query.filter_by(user_id=user_id).order_by(Material.uploaded_at.desc()).all()
+    # Also include unassigned if any
+    if not materials:
+        materials = Material.query.order_by(Material.uploaded_at.desc()).all()
+
+    formatted_materials = [
+        {
+            'id': m.id,
+            'name': m.filename,
+            'size': m.file_size,
+            'uploaded_at': m.uploaded_at,
+            'type': m.file_type,
+            'page_count': m.page_count,
+            'topics': m.topics
+        } for m in materials
+    ]
+
+    return render_template('upload_materials.html', materials=formatted_materials)
+
+@app.route('/teacher/material/delete/<mat_id>', methods=['POST'])
+def delete_material(mat_id):
+    if session.get('role') != 'teacher':
+        return redirect(url_for('teacher_login'))
+    
+    mat = Material.query.get(mat_id)
+    if mat:
+        db.session.delete(mat)
+        db.session.commit()
+        flash('Study material removed from database.', 'info')
+    return redirect(url_for('upload_materials'))
+
+@app.route('/teacher/generate-paper', methods=['POST'])
+def generate_paper():
+    if session.get('role') != 'teacher':
+        return redirect(url_for('teacher_login'))
+
+    user_id = session.get('user_id')
+    materials = Material.query.filter_by(user_id=user_id).all()
+    if not materials:
+        materials = Material.query.all()
+
+    if not materials:
+        flash('Please upload at least one study material file before generating a paper.', 'error')
+        return redirect(url_for('upload_materials'))
+
+    difficulty = request.form.get('difficulty', 'Medium')
+    source_mat = materials[0]
+
+    questions = generate_ai_question_paper(materials, difficulty)
+
+    paper = QuestionPaper(
+        user_id=user_id or source_mat.user_id,
+        title=f"Assessment: {source_mat.filename.rsplit('.', 1)[0].replace('_', ' ').title()}",
+        subject=session.get('department', 'Educational Assessment'),
+        difficulty=difficulty,
+        total_marks=50,
+        duration_mins=30,
+        questions_json=json.dumps(questions),
+        created_at=datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+    )
+    db.session.add(paper)
+    db.session.commit()
+
+    # Also create default ScheduledTest if none exists
+    scheduled = ScheduledTest.query.filter_by(teacher_id=paper.user_id).first()
+    if not scheduled:
+        scheduled = ScheduledTest(
+            teacher_id=paper.user_id,
+            paper_id=paper.id,
+            test_title=paper.title,
+            test_date=datetime.datetime.now().strftime('%Y-%m-%d'),
+            test_time='10:00 AM',
+            duration_mins=30,
+            passcode='AI-2026'
+        )
+        db.session.add(scheduled)
+    else:
+        scheduled.paper_id = paper.id
+        scheduled.test_title = paper.title
+
+    db.session.commit()
+
+    flash(f'Question Paper generated and saved to SQLite Database!', 'success')
+    return redirect(url_for('question_paper'))
+
+# ----------------------------------------------------------
+# PAGE 3: GENERATED QUESTION PAPER, TEST SCHEDULER & QR CODE
+# ----------------------------------------------------------
+@app.route('/teacher/question-paper')
+def question_paper():
+    if session.get('role') != 'teacher':
+        flash('Please log in as an educator to access this page.', 'error')
+        return redirect(url_for('teacher_login'))
+
+    user_id = session.get('user_id')
+    paper = QuestionPaper.query.filter_by(user_id=user_id).order_by(QuestionPaper.created_at.desc()).first()
+    if not paper:
+        paper = QuestionPaper.query.order_by(QuestionPaper.created_at.desc()).first()
+
+    scheduled = ScheduledTest.query.filter_by(teacher_id=user_id).first() if paper else None
+    if not scheduled:
+        scheduled = ScheduledTest.query.first()
+
+    if not scheduled:
+        test_data = {
+            'title': paper.title if paper else 'AI Assessment Test',
+            'date': datetime.datetime.now().strftime('%Y-%m-%d'),
+            'time': '10:00 AM',
+            'duration_mins': 30,
+            'passcode': 'AI-2026'
+        }
+    else:
+        test_data = {
+            'title': scheduled.test_title,
+            'date': scheduled.test_date,
+            'time': scheduled.test_time,
+            'duration_mins': scheduled.duration_mins,
+            'passcode': scheduled.passcode
+        }
+
+    student_test_url = request.host_url + 'student/login?code=' + test_data['passcode']
+    qr_code_url = generate_qr_code(student_test_url)
+
+    paper_dict = None
+    if paper:
+        paper_dict = {
+            'id': paper.id,
+            'title': paper.title,
+            'subject': paper.subject,
+            'difficulty': paper.difficulty,
+            'total_marks': paper.total_marks,
+            'duration_mins': paper.duration_mins,
+            'created_at': paper.created_at,
+            'questions': paper.questions
+        }
+
+    return render_template(
+        'question_paper.html',
+        paper=paper_dict,
+        test=test_data,
+        test_url=student_test_url,
+        qr_code_url=qr_code_url
+    )
+
+@app.route('/teacher/download-pdf-paper')
+def download_pdf_paper():
+    if session.get('role') != 'teacher':
+        return redirect(url_for('teacher_login'))
+
+    user_id = session.get('user_id')
+    paper = QuestionPaper.query.filter_by(user_id=user_id).order_by(QuestionPaper.created_at.desc()).first()
+    if not paper:
+        paper = QuestionPaper.query.order_by(QuestionPaper.created_at.desc()).first()
+
+    if not paper:
+        flash('No generated paper available to download.', 'error')
+        return redirect(url_for('question_paper'))
+
+    if REPORTLAB_AVAILABLE:
+        pdf_buffer = create_pdf_question_paper(paper)
+        filename = f"Question_Paper_{paper.title.replace(' ', '_')}.pdf"
+        return send_file(
+            pdf_buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/pdf'
+        )
+    else:
+        flash('ReportLab library is not installed.', 'error')
+        return redirect(url_for('question_paper'))
+
+@app.route('/teacher/schedule-test', methods=['POST'])
+def schedule_test():
+    if session.get('role') != 'teacher':
+        return redirect(url_for('teacher_login'))
+
+    user_id = session.get('user_id')
+    scheduled = ScheduledTest.query.filter_by(teacher_id=user_id).first()
+    if not scheduled:
+        scheduled = ScheduledTest(teacher_id=user_id)
+        db.session.add(scheduled)
+
+    scheduled.test_title = request.form.get('test_title', 'AI Assessment Test')
+    scheduled.test_date = request.form.get('test_date', datetime.datetime.now().strftime('%Y-%m-%d'))
+    scheduled.test_time = request.form.get('test_time', '10:00 AM')
+    scheduled.duration_mins = int(request.form.get('duration_mins', 30))
+    scheduled.passcode = request.form.get('passcode', 'AI-2026').strip().upper()
+
+    db.session.commit()
+    flash('Test schedule saved in database! Students can scan QR code to join.', 'success')
+    return redirect(url_for('question_paper'))
+
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
