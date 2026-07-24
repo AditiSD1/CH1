@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Teacher Analytics & Student Progress | Examify{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h2>Teacher Analytics & Evaluation Dashboard</h2>
+        <p>Track student test attempt status, scores, class averages, and individual progress for: <strong>{{ paper_title }}</strong></p>
+    </div>
+    <div>
+        <a href="{{ url_for('question_paper') }}" class="btn-secondary"><i class="fa-solid fa-file-signature"></i> View Question Paper</a>
+    </div>
+</div>
+
+<!-- Key Performance Stat Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Total Registered Students</div>
+        <div class="stat-number" style="color: #ffffff;">{{ total_students }}</div>
+        <div style="font-size: 0.78rem; color: var(--text-secondary);">Registered Accounts</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">Tests Attempted</div>
+        <div class="stat-number" style="color: #10b981;">{{ attempted_count }}</div>
+        <div style="font-size: 0.78rem; color: #6ee7b7;">{{ ((attempted_count / total_students) * 100)|round(1) if total_students > 0 else 0 }}% Participation</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">Tests Pending</div>
+        <div class="stat-number" style="color: #f87171;">{{ pending_count }}</div>
+        <div style="font-size: 0.78rem; color: #fca5a5;">Awaiting Submission</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">Class Average Score</div>
+        <div class="stat-number" style="color: #818cf8;">{{ avg_score }}%</div>
+        <div style="font-size: 0.78rem; color: #a5b4fc;">Automated Evaluation</div>
+    </div>
+</div>
+
+<!-- Student Attempt Tracking Table -->
+<div class="glass-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <h3 style="font-family: var(--font-heading); color: #fff; font-size: 1.2rem;">Student Attempt & Progress Roster</h3>
+        <span style="font-size: 0.85rem; color: var(--text-secondary);"><i class="fa-solid fa-rotate"></i> Real-time sync</span>
+    </div>
+
+    {% if attempts %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Roll Number</th>
+                        <th>Status</th>
+                        <th>Score</th>
+                        <th>Grade</th>
+                        <th>Submission Date/Time</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for att in attempts %}
+                        <tr>
+                            <td style="font-weight: 600; color: #ffffff;">
+                                <i class="fa-solid fa-user-circle {{ 'text-success' if att.status == 'Attempted' else 'text-muted' }}" style="margin-right: 8px;"></i>
+                                {{ att.student_name }}
+                                <div style="font-size: 0.78rem; color: var(--text-muted);">{{ att.student_email }}</div>
+                            </td>
+                            <td style="color: var(--text-secondary); font-size: 0.85rem; font-weight: 500;">
+                                {{ att.roll_no }}
+                            </td>
+                            <td>
+                                {% if att.status == 'Attempted' %}
+                                    <span class="topic-tag" style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 700;">
+                                        <i class="fa-solid fa-circle-check"></i> Attempted
+                                    </span>
+                                {% else %}
+                                    <span class="topic-tag" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 700;">
+                                        <i class="fa-solid fa-clock"></i> Pending
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td style="font-weight: 700;" class="{{ 'text-cyan' if att.status == 'Attempted' else 'text-muted' }}">
+                                {% if att.status == 'Attempted' %}
+                                    {{ att.score }} / {{ att.total_marks }} ({{ att.percentage }}%)
+                                {% else %}
+                                    -- / --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if att.status == 'Attempted' %}
+                                    <span class="topic-tag" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc; font-weight: 800;">
+                                        {{ att.grade }}
+                                    </span>
+                                {% else %}
+                                    <span style="color: var(--text-muted);">-</span>
+                                {% endif %}
+                            </td>
+                            <td style="color: var(--text-secondary); font-size: 0.85rem;">
+                                {{ att.submitted_at }}
+                            </td>
+                            <td>
+                                {% if att.status == 'Attempted' %}
+                                    <button class="btn-secondary btn-view-feedback" style="padding: 5px 12px; font-size: 0.8rem;" data-feedback="{{ att.feedback }}">
+                                        <i class="fa-solid fa-eye"></i> View Feedback
+                                    </button>
+                                {% else %}
+                                    <button class="btn-secondary" style="padding: 5px 12px; font-size: 0.8rem; opacity: 0.5;" disabled>
+                                        N/A
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 3rem; color: var(--text-muted);">
+            <i class="fa-solid fa-users-slash" style="font-size: 2.5rem; margin-bottom: 1rem; display: block;"></i>
+            <p>No student accounts have joined or attempted tests yet. Students can sign up using the QR Code link or Student Portal.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
