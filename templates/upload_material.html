@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Study Material | Examify{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Upload & Manage Study Materials</h2>
+    <p>Upload lecture notes, PDFs, or handwritten materials to automatically extract chapters and generate assessment papers.</p>
+</div>
+
+<!-- Upload Drag & Drop Section -->
+<div class="glass-card">
+    <h3 style="font-family: var(--font-heading); font-size: 1.2rem; color: #fff; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+        <i class="fa-solid fa-cloud-arrow-up" style="color: #818cf8;"></i> Upload New Content
+    </h3>
+
+    <form action="{{ url_for('upload_materials') }}" method="POST" enctype="multipart/form-data">
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click();">
+            <div class="dropzone-icon">
+                <i class="fa-solid fa-file-pdf"></i>
+            </div>
+            <div class="dropzone-text">
+                <strong style="color: #ffffff; font-size: 1.1rem; display: block; margin-bottom: 4px;">Click to upload or drag & drop files here</strong>
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">Supports PDF, Word (.docx), Handwritten Notes (.jpg, .png) up to 25MB</span>
+            </div>
+            <input type="file" id="fileInput" name="file" style="display: none;" accept=".pdf,.txt,.doc,.docx,.png,.jpg,.jpeg">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn-primary">
+                <i class="fa-solid fa-upload"></i>
+                <span>Upload & Process Document</span>
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Uploaded Materials Table -->
+<div class="glass-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <div>
+            <h3 style="font-family: var(--font-heading); font-size: 1.2rem; color: #fff;">Uploaded Course Materials ({{ materials|length }})</h3>
+            <p style="color: var(--text-secondary); font-size: 0.85rem;">AI auto-identifies topics & concepts from these sources</p>
+        </div>
+        
+        <!-- Generate Paper Trigger Form -->
+        <form action="{{ url_for('generate_paper') }}" method="POST" style="display: flex; align-items: center; gap: 10px;">
+            <select name="difficulty" class="form-control" style="width: 140px; padding: 8px 12px; font-size: 0.85rem;">
+                <option value="Easy">Easy</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="Hard">Hard</option>
+            </select>
+            <button type="submit" class="btn-primary" style="padding: 9px 18px; font-size: 0.88rem;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Generate Question Paper</span>
+            </button>
+        </form>
+    </div>
+
+    {% if materials %}
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Document Name</th>
+                        <th>Type & Size</th>
+                        <th>Upload Date</th>
+                        <th>Auto-Detected Topics / Chapters</th>
+                        <th style="text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mat in materials %}
+                        <tr>
+                            <td style="font-weight: 600; color: #ffffff;">
+                                <i class="fa-solid fa-file-lines" style="color: #818cf8; margin-right: 8px;"></i>
+                                {{ mat.name }}
+                            </td>
+                            <td style="color: var(--text-secondary); font-size: 0.85rem;">
+                                {{ mat.type }} ({{ mat.size }})
+                            </td>
+                            <td style="color: var(--text-secondary); font-size: 0.85rem;">
+                                {{ mat.uploaded_at }}
+                            </td>
+                            <td>
+                                {% for topic in mat.topics %}
+                                    <span class="topic-tag">{{ topic }}</span>
+                                {% endfor %}
+                            </td>
+                            <td style="text-align: right;">
+                                <form action="{{ url_for('delete_material', mat_id=mat.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this material?');">
+                                    <button type="submit" class="btn-danger">
+                                        <i class="fa-solid fa-trash-can"></i> Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 3rem; color: var(--text-muted);">
+            <i class="fa-regular fa-folder-open" style="font-size: 2.5rem; margin-bottom: 1rem; display: block;"></i>
+            <p>No study materials uploaded yet. Upload your first PDF to generate question papers.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
