@@ -1,6 +1,6 @@
 ## Automated Exam Generation & Assessment Platform
 
-### Demo -
+### LIVE DEMO LINK - ch1-production-001.up.railway.app
 
 ## Problem Statement
 Creating examinations from study material requires significant manual effort,
