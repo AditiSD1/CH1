@@ -1,0 +1,598 @@
+:root {
+    --font-heading: 'Plus Jakarta Sans', sans-serif;
+    --font-body: 'Inter', sans-serif;
+
+    /* Base Palette */
+    --bg-dark: #0a0e17;
+    --bg-card: rgba(22, 28, 45, 0.75);
+    --bg-card-border: rgba(255, 255, 255, 0.08);
+    --bg-input: rgba(13, 18, 30, 0.65);
+    --bg-input-focus: rgba(20, 28, 46, 0.95);
+    
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    /* Teacher Theme Colors (Indigo/Purple) */
+    --teacher-primary: #6366f1;
+    --teacher-secondary: #8b5cf6;
+    --teacher-glow: rgba(99, 102, 241, 0.35);
+    --teacher-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+
+    /* Student Theme Colors (Teal/Cyan) */
+    --student-primary: #06b6d4;
+    --student-secondary: #10b981;
+    --student-glow: rgba(6, 182, 212, 0.35);
+    --student-gradient: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #10b981 100%);
+
+    /* Radii & Speeds */
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 24px;
+    --radius-full: 9999px;
+    --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --------------------------------------------------------------------------
+   2. Reset & Typography
+   -------------------------------------------------------------------------- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Background Animated Blobs */
+.bg-blur-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.blur-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(130px);
+    opacity: 0.4;
+    animation: blobFloat 20s infinite alternate ease-in-out;
+}
+
+.blob-1 {
+    width: 500px;
+    height: 500px;
+    top: -100px;
+    left: -100px;
+    background: var(--teacher-primary);
+}
+
+.blob-2 {
+    width: 550px;
+    height: 550px;
+    bottom: -150px;
+    right: -100px;
+    background: var(--student-primary);
+    animation-delay: -7s;
+}
+
+@keyframes blobFloat {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(60px, 40px) scale(1.08); }
+    100% { transform: translate(-40px, -50px) scale(0.95); }
+}
+
+/* --------------------------------------------------------------------------
+   3. Navbar Layout
+   -------------------------------------------------------------------------- */
+.navbar {
+    background: rgba(10, 14, 23, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--bg-card-border);
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    padding: 0.85rem 2rem;
+}
+
+.nav-container {
+    max-width: 1240px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.brand-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+}
+
+.brand-logo {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 15px var(--teacher-glow);
+}
+
+.brand-text h1 {
+    font-family: var(--font-heading);
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1;
+}
+
+.brand-text h1 span {
+    background: var(--teacher-gradient);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.nav-menu {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    list-style: none;
+}
+
+.nav-item a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all var(--transition-fast);
+}
+
+.nav-item a:hover,
+.nav-item a.active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 6px 14px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--bg-card-border);
+    font-size: 0.85rem;
+}
+
+.user-badge {
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.badge-teacher {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.badge-student {
+    background: rgba(6, 182, 212, 0.2);
+    color: #67e8f9;
+    border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.btn-logout {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.btn-logout:hover {
+    color: #ef4444;
+}
+
+/* --------------------------------------------------------------------------
+   4. Page Container Layout
+   -------------------------------------------------------------------------- */
+.main-wrapper {
+    flex: 1;
+    max-width: 1240px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-header h2 {
+    font-family: var(--font-heading);
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+}
+
+.page-header p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-top: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   5. Glassmorphism Card System
+   -------------------------------------------------------------------------- */
+.glass-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    margin-bottom: 1.75rem;
+}
+
+/* Form Styles */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-control {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    outline: none;
+    transition: all var(--transition-fast);
+}
+
+.form-control:focus {
+    background: var(--bg-input-focus);
+    border-color: var(--teacher-primary);
+    box-shadow: 0 0 0 3px var(--teacher-glow);
+}
+
+textarea.form-control {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 24px;
+    background: var(--teacher-gradient);
+    border: none;
+    border-radius: var(--radius-md);
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 10px 25px -5px var(--teacher-glow);
+    transition: all var(--transition-smooth);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px -5px var(--teacher-glow);
+}
+
+.btn-student-primary {
+    background: var(--student-gradient);
+    box-shadow: 0 10px 25px -5px var(--student-glow);
+}
+
+.btn-student-primary:hover {
+    box-shadow: 0 15px 30px -5px var(--student-glow);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--bg-card-border);
+    color: var(--text-secondary);
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-danger:hover {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   6. Custom Page-Specific Styles
+   -------------------------------------------------------------------------- */
+
+/* Upload Dropzone */
+.dropzone {
+    border: 2px dashed rgba(99, 102, 241, 0.4);
+    background: rgba(99, 102, 241, 0.04);
+    border-radius: var(--radius-md);
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    margin-bottom: 1.5rem;
+}
+
+.dropzone:hover {
+    border-color: var(--teacher-primary);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.dropzone-icon {
+    font-size: 2.5rem;
+    color: #a5b4fc;
+    margin-bottom: 1rem;
+}
+
+/* Materials Table */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.data-table th,
+.data-table td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--bg-card-border);
+}
+
+.data-table th {
+    background: rgba(10, 14, 23, 0.5);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.data-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.topic-tag {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    margin: 2px;
+}
+
+/* Question Paper Styles */
+.question-card {
+    background: rgba(10, 14, 23, 0.4);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.question-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
+}
+
+.q-badge {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+}
+
+.options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 1rem 0;
+}
+
+.option-item {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--bg-card-border);
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.option-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.option-item input[type="radio"] {
+    accent-color: var(--student-primary);
+}
+
+/* Model Answer Box */
+.model-solution {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    margin-top: 10px;
+    font-size: 0.88rem;
+    color: #a7f3d0;
+}
+
+/* QR Code Section */
+.qr-box {
+    text-align: center;
+    padding: 1.5rem;
+    background: #ffffff;
+    border-radius: var(--radius-md);
+    display: inline-block;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.qr-box canvas, .qr-box img {
+    max-width: 180px;
+    height: auto;
+}
+
+/* Analytics Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--bg-card-border);
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.stat-number {
+    font-family: var(--font-heading);
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 4px 0;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* Flash Messages */
+.flash-container {
+    max-width: 1240px;
+    margin: 1rem auto 0;
+    padding: 0 1.5rem;
+}
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1rem;
+}
+
+.alert-success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.alert-error {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.alert-info {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Responsive Media Queries */
+@media (max-width: 900px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .options-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .navbar {
+        padding: 0.75rem 1rem;
+    }
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
