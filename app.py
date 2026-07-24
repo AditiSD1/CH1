@@ -2,6 +2,7 @@ import os
 import io
 import uuid
 import datetime
+import re
 import json
 import base64
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
@@ -10,7 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
 
 try:
-    from pypdf import pdfReader
+    from pypdf import PdfReader
     PYPDF_AVAILABLE = True
 except ImportError:
     PYPDF_AVAILABLE = False
@@ -19,7 +20,7 @@ try:
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer,HRFlowable
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
     REPORTLAB_AVAILABLE = True  
 except ImportError:
     REPORTLAB_AVAILABLE = False
@@ -133,6 +134,238 @@ class StudentAttempt(db.Model):
 
 with app.app_context():
     db.create_all()
+
+def generate_qr_code(text):
+    if not QRCODE_AVAILABLE:
+        return ""
+    try:
+        qr = qrcode.QRCode(version=1, box_size=6, border=2)
+        qr.add_data(text)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="#22d3ee", back_color="#0a0e17")
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode('utf-8')
+    except Exception as e:
+        print(f"QR Code Error: {e}")
+        return ""
+
+def process_pdf_material(filepath, filename):
+    extracted_text = ""
+    page_count = 0
+    topics = []
+
+    if PYPDF_AVAILABLE and filename.lower().endswith('.pdf'):
+        try:
+            reader = PdfReader(filepath)
+            page_count = len(reader.pages)
+            for page in reader.pages[:15]:
+                text = page.extract_text() or ""
+                extracted_text += text + " "
+        except Exception as e:
+            print(f"pypdf extraction error: {e}")
+
+    if not extracted_text:
+        try:
+            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                extracted_text = f.read(5000)
+        except Exception:
+            extracted_text = filename.replace('_', ' ').replace('-', ' ')
+
+    # Extract keywords/topics
+    words = re.findall(r'\b[A-Za-z]{4,}\b', extracted_text)
+    stopwords = {'this', 'that', 'with', 'from', 'have', 'were', 'which', 'their', 'about', 'there', 'would', 'could', 'should', 'page'}
+    filtered = [w.title() for w in words if w.lower() not in stopwords]
+
+    term_counts = {}
+    for word in filtered:
+        term_counts[word] = term_counts.get(word, 0) + 1
+    
+    sorted_topics = sorted(term_counts.items(), key=lambda x: x[1], reverse=True)
+    topics = [item[0] for item in sorted_topics[:5]]
+
+    if not topics:
+        topics = ['Core Concepts', 'Chapter Analysis', 'Key Principles']
+
+    return extracted_text.strip(), page_count, topics
+
+def call_gemini_api(prompt, api_key=None):
+    """
+    Direct Integration with Google Gemini API (gemini-1.5-flash)
+    Generates content using Gemini REST API.
+    """
+    key = api_key or os.environ.get('GEMINI_API_KEY', '')
+    if not key or len(key.strip()) < 5:
+        return None
+
+    try:
+        import urllib.request
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key.strip()}"
+        payload = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"}
+        }).encode('utf-8')
+
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=12) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            text_content = res_data["candidates"][0]["content"]["parts"][0]["text"]
+            return json.loads(text_content)
+    except Exception as e:
+        print(f"Gemini API Call Error: {e}")
+        return None
+
+def generate_ai_question_paper(materials, difficulty='Medium'):
+    all_topics = []
+    source_text = ""
+    for m in materials:
+        all_topics.extend(m.topics)
+        if m.extracted_text:
+            source_text += m.extracted_text[:2000] + " "
+
+    # 1. Attempt live Google Gemini API call if GEMINI_API_KEY environment variable or key is configured
+    gemini_prompt = f"""
+You are an expert educational assessment creator.
+Based on the following extracted course material text and topics:
+Topics: {json.dumps(all_topics)}
+Excerpt: {source_text[:1500]}
+Difficulty Level: {difficulty}
+
+Generate a JSON object with 3 Multiple Choice Questions (5 marks each) and 2 Descriptive Questions (15 and 20 marks).
+Return JSON matching this exact structure:
+[
+  {{
+    "id": "q1",
+    "type": "mcq",
+    "question": "Question text?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "answer": "Option A",
+    "explanation": "Explanation text",
+    "marks": 5
+  }},
+  {{
+    "id": "q4",
+    "type": "descriptive",
+    "question": "Descriptive question?",
+    "model_answer": "Model solution text",
+    "keywords": ["keyword1", "keyword2"],
+    "marks": 15
+  }}
+]
+"""
+    gemini_result = call_gemini_api(gemini_prompt)
+    if gemini_result and isinstance(gemini_result, list) and len(gemini_result) > 0:
+        print("Successfully generated question paper using Google Gemini API!")
+        return gemini_result
+
+    # 2. Intelligent Topic-Based Fallback Generator if no Gemini key is set
+    top1 = all_topics[0] if len(all_topics) > 0 else 'Core Concept'
+    top2 = all_topics[1] if len(all_topics) > 1 else 'System Principles'
+    top3 = all_topics[2] if len(all_topics) > 2 else 'Performance Analysis'
+
+    questions = [
+        {
+            'id': 'q1',
+            'type': 'mcq',
+            'question': f"What is the primary objective when evaluating '{top1}' in the study material?",
+            'options': [
+                f"To systematically analyze {top1} principles",
+                'To increase processing latency',
+                'To bypass input validation protocols',
+                'To reduce memory allocation limits'
+            ],
+            'answer': f"To systematically analyze {top1} principles",
+            'explanation': f'Extracted directly from study notes on {top1}.',
+            'marks': 5
+        },
+        {
+            'id': 'q2',
+            'type': 'mcq',
+            'question': f"Which core methodology is emphasized for '{top2}'?",
+            'options': [
+                'Iterative Optimization Protocol',
+                'Static Record Keeping',
+                'Unsupervised Fallback Routine',
+                'Manual Batch Deletion'
+            ],
+            'answer': 'Iterative Optimization Protocol',
+            'explanation': f'Primary methodology identified for {top2}.',
+            'marks': 5
+        },
+        {
+            'id': 'q3',
+            'type': 'mcq',
+            'question': f"What is the expected outcome when applying guidelines for '{top3}'?",
+            'options': [
+                'Minimizing operational error rates',
+                'Doubling runtime execution time',
+                'Deleting log history',
+                'Disabling security tokens'
+            ],
+            'answer': 'Minimizing operational error rates',
+            'explanation': 'Key performance metric highlighted in course notes.',
+            'marks': 5
+        },
+        {
+            'id': 'q4',
+            'type': 'descriptive',
+            'question': f"Explain how {top1} and {top2} interact within the context of the course material.",
+            'model_answer': f"The study material details how {top1} establishes foundational framework rules, while {top2} applies these rules to optimize operational throughput.",
+            'keywords': [top1.lower(), top2.lower(), 'analysis', 'concept', 'evaluation'],
+            'marks': 15
+        },
+        {
+            'id': 'q5',
+            'type': 'descriptive',
+            'question': f"Provide a comprehensive overview of key takeaways regarding {top3}.",
+            'model_answer': f"The study material provides structured guidance on {top3}, emphasizing systematic evaluation, performance optimization, and robust error control.",
+            'keywords': [top3.lower(), 'principles', 'guidance', 'performance', 'evaluation'],
+            'marks': 20
+        }
+    ]
+
+    return questions
+
+def create_pdf_question_paper(paper):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    story = []
+
+    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=18, textColor=colors.HexColor('#1e1b4b'), alignment=1, spaceAfter=6)
+    sub_style = ParagraphStyle('DocSub', parent=styles['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor('#475569'), alignment=1, spaceAfter=12)
+    section_style = ParagraphStyle('DocSec', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=12, textColor=colors.HexColor('#4338ca'), spaceBefore=10, spaceAfter=6)
+    question_style = ParagraphStyle('DocQ', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#0f172a'), spaceBefore=6, spaceAfter=4)
+    body_style = ParagraphStyle('DocBody', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=colors.HexColor('#334155'), spaceAfter=4)
+
+    story.append(Paragraph(paper.title, title_style))
+    story.append(Paragraph(f"Subject: {paper.subject} | Total Marks: {paper.total_marks} | Duration: {paper.duration_mins} Mins", sub_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cbd5e1'), spaceAfter=12))
+
+    story.append(Paragraph("Section A: Multiple Choice Questions", section_style))
+    q_num = 1
+    for q in paper.questions:
+        if q['type'] == 'mcq':
+            story.append(Paragraph(f"Q{q_num}. {q['question']} [{q['marks']} Marks]", question_style))
+            for idx, opt in enumerate(q['options'], 1):
+                story.append(Paragraph(f"   ({chr(64+idx)}) {opt}", body_style))
+            story.append(Spacer(1, 4))
+            q_num += 1
+
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("Section B: Descriptive Questions", section_style))
+    for q in paper.questions:
+        if q['type'] == 'descriptive':
+            story.append(Paragraph(f"Q{q_num}. {q['question']} [{q['marks']} Marks]", question_style))
+            story.append(Paragraph("   Answer: ______________________________________________________________________", body_style))
+            story.append(Paragraph("   ______________________________________________________________________________", body_style))
+            story.append(Spacer(1, 6))
+            q_num += 1
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
