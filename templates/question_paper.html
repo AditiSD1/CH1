@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Generated Question Paper & Test Schedule | Examify{% endblock %}
+
+{% block content %}
+{% if paper %}
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h2>{{ paper.title }}</h2>
+            <p>{{ paper.subject }} | Total Marks: <strong>{{ paper.total_marks }}</strong> | Difficulty: <span class="topic-tag" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc;">{{ paper.difficulty }}</span></p>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <a href="{{ url_for('download_pdf_paper') }}" class="btn-primary" style="padding: 8px 16px; font-size: 0.88rem;">
+                <i class="fa-solid fa-file-pdf"></i> Download PDF Paper
+            </a>
+            <button class="btn-secondary" onclick="window.print();"><i class="fa-solid fa-print"></i> Print Paper</button>
+            <a href="{{ url_for('upload_materials') }}" class="btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to Materials</a>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.8fr 1fr; gap: 1.5rem; align-items: start;">
+
+        <!-- Left Column: Question Paper Preview -->
+        <div class="glass-card">
+            <div style="border-bottom: 1px solid var(--bg-card-border); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-family: var(--font-heading); color: #fff;">Exam Paper Preview</h3>
+                <span style="font-size: 0.85rem; color: var(--text-secondary);">Generated on {{ paper.created_at }}</span>
+            </div>
+
+            <!-- Section A: Multiple Choice Questions -->
+            <div style="margin-bottom: 2rem;">
+                <h4 style="color: #a5b4fc; margin-bottom: 1rem; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-list-check"></i> Section A: Multiple Choice Questions ({{ paper.mcq_count if paper.mcq_count is defined else 3 }} Qs)
+                </h4>
+
+                {% for q in paper.questions %}
+                    {% if q.type == 'mcq' %}
+                        <div class="question-card">
+                            <div class="question-header">
+                                <span class="q-badge">Question {{ loop.index }}</span>
+                                <span style="font-size: 0.82rem; color: var(--text-secondary);">[{{ q.marks }} Marks]</span>
+                            </div>
+                            <p style="color: #ffffff; font-weight: 600; font-size: 0.95rem; margin-bottom: 0.75rem;">{{ q.question }}</p>
+                            
+                            <div class="options-grid">
+                                {% for opt in q.options %}
+                                    {% set is_correct = (opt == q.answer) %}
+                                    <div class="option-item {{ 'correct-opt' if is_correct else '' }}">
+                                        <i class="fa-regular {{ 'fa-circle-check text-success' if is_correct else 'fa-circle text-muted' }}"></i>
+                                        <span>{{ opt }}</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <div class="model-solution">
+                                <strong><i class="fa-solid fa-key"></i> Correct Answer:</strong> {{ q.answer }}
+                                <div style="font-size: 0.82rem; color: #93c5fd; margin-top: 4px;">{{ q.explanation }}</div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- Section B: Descriptive Questions -->
+            <div>
+                <h4 style="color: #a5b4fc; margin-bottom: 1rem; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-paragraph"></i> Section B: Descriptive Questions ({{ paper.descriptive_count if paper.descriptive_count is defined else 2 }} Qs)
+                </h4>
+
+                {% for q in paper.questions %}
+                    {% if q.type == 'descriptive' %}
+                        <div class="question-card">
+                            <div class="question-header">
+                                <span class="q-badge">Question {{ loop.index }}</span>
+                                <span style="font-size: 0.82rem; color: var(--text-secondary);">[{{ q.marks }} Marks]</span>
+                            </div>
+                            <p style="color: #ffffff; font-weight: 600; font-size: 0.95rem; margin-bottom: 0.75rem;">{{ q.question }}</p>
+                            
+                            <div class="model-solution">
+                                <strong><i class="fa-solid fa-lightbulb"></i> Model Solution Key:</strong>
+                                <p style="margin-top: 4px; line-height: 1.4; color: #e2e8f0;">{{ q.model_answer }}</p>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Right Column: Test Scheduling & Dynamic QR Code -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <!-- QR Code Share Card -->
+            <div class="glass-card" style="text-align: center;">
+                <h3 style="font-family: var(--font-heading); color: #fff; font-size: 1.15rem; margin-bottom: 0.5rem;">
+                    <i class="fa-solid fa-qrcode" style="color: #22d3ee;"></i> Student Test QR Code
+                </h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">
+                    Students can scan this QR code or enter the passcode to join the test instantly.
+                </p>
+
+                <div class="qr-box">
+                    <div id="qrcode" data-url="{{ test_url }}"></div>
+                </div>
+
+                <div style="margin-top: 1rem; background: rgba(10, 14, 23, 0.6); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--bg-card-border);">
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase;">Class Access Passcode</div>
+                    <div style="font-family: var(--font-heading); font-size: 1.25rem; font-weight: 800; color: #22d3ee; letter-spacing: 1px; margin-top: 2px;">
+                        {{ test.passcode }}
+                    </div>
+                </div>
+
+                <button id="btnCopyJoinLink" class="btn-secondary" style="width: 100%; margin-top: 1rem; justify-content: center;" data-url="{{ test_url }}">
+                    <i class="fa-solid fa-copy"></i> Copy Join Link
+                </button>
+            </div>
+
+            <!-- Schedule Form Card -->
+            <div class="glass-card">
+                <h3 style="font-family: var(--font-heading); color: #fff; font-size: 1.15rem; margin-bottom: 1rem;">
+                    <i class="fa-solid fa-calendar-check" style="color: #818cf8;"></i> Schedule Test Details
+                </h3>
+
+                <form action="{{ url_for('schedule_test') }}" method="POST">
+                    <div class="form-group">
+                        <label for="test_title">Test Name / Title</label>
+                        <input type="text" id="test_title" name="test_title" class="form-control" value="{{ test.title }}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="test_date">Test Date</label>
+                        <input type="date" id="test_date" name="test_date" class="form-control" value="{{ test.date }}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="test_time">Start Time</label>
+                        <input type="time" id="test_time" name="test_time" class="form-control" value="10:00" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="duration_mins">Duration (Minutes)</label>
+                        <input type="number" id="duration_mins" name="duration_mins" class="form-control" value="{{ test.duration_mins }}" min="5" max="180" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="passcode">Class Access Passcode</label>
+                        <input type="text" id="passcode" name="passcode" class="form-control" value="{{ test.passcode }}" required style="text-transform: uppercase; font-weight: 700; color: #22d3ee;">
+                    </div>
+
+                    <button type="submit" class="btn-primary" style="width: 100%;">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Test Schedule
+                    </button>
+                </form>
+            </div>
+
+        </div>
+
+    </div>
+
+{% else %}
+    <!-- EMPTY STATE WHEN NO PAPER IS GENERATED YET -->
+    <div class="glass-card" style="text-align: center; padding: 4rem 2rem;">
+        <i class="fa-solid fa-file-circle-plus" style="font-size: 3.5rem; color: #818cf8; margin-bottom: 1.25rem;"></i>
+        <h3 style="font-family: var(--font-heading); font-size: 1.6rem; color: #fff; margin-bottom: 0.5rem;">No Question Paper Generated Yet</h3>
+        <p style="color: var(--text-secondary); max-width: 500px; margin: 0 auto 1.75rem; font-size: 0.95rem; line-height: 1.5;">
+            Upload your course study material or lecture notes first, then click <strong>"Generate Question Paper"</strong> to automatically create an assessment.
+        </p>
+        <a href="{{ url_for('upload_materials') }}" class="btn-primary" style="padding: 12px 28px;">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Go to Study Materials
+        </a>
+    </div>
+{% endif %}
+{% endblock %}
