@@ -135,6 +135,82 @@ class StudentAttempt(db.Model):
 with app.app_context():
     db.create_all()
 
+# Helper for parsing scheduled test window
+def parse_test_window(scheduled):
+    if not scheduled:
+        now = datetime.datetime.now()
+        start_dt = now
+        end_dt = now + datetime.timedelta(minutes=30)
+        return {
+            'start_dt': start_dt,
+            'end_dt': end_dt,
+            'start_str': start_dt.strftime('%d %b %Y, %I:%M %p'),
+            'end_str': end_dt.strftime('%d %b %Y, %I:%M %p'),
+            'start_time_only': start_dt.strftime('%I:%M %p'),
+            'end_time_only': end_dt.strftime('%I:%M %p'),
+            'status': 'ACTIVE',
+            'remaining_start_sec': 0,
+            'remaining_end_sec': 1800
+        }
+
+    t_date = scheduled.test_date or datetime.datetime.now().strftime('%Y-%m-%d')
+    t_time = scheduled.test_time or '10:00 AM'
+    duration = scheduled.duration_mins or 30
+
+    time_str = f"{t_date} {t_time}".strip()
+    start_dt = None
+    
+    formats = [
+        "%Y-%m-%d %I:%M %p", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %I:%M%p", "%d-%m-%Y %H:%M", "%Y/%m/%d %H:%M"
+    ]
+    for fmt in formats:
+        try:
+            start_dt = datetime.datetime.strptime(time_str, fmt)
+            break
+        except ValueError:
+            pass
+
+    if not start_dt:
+        try:
+            d_parts = [int(x) for x in t_date.split('-')]
+            clean_time = t_time.upper().replace('AM','').replace('PM','').strip()
+            t_parts = [int(x) for x in clean_time.split(':')]
+            hour = t_parts[0]
+            if 'PM' in t_time.upper() and hour < 12:
+                hour += 12
+            start_dt = datetime.datetime(d_parts[0], d_parts[1], d_parts[2], hour, t_parts[1])
+        except Exception:
+            start_dt = datetime.datetime.now()
+
+    end_dt = start_dt + datetime.timedelta(minutes=duration)
+    now = datetime.datetime.now()
+
+    if now < start_dt:
+        status = 'UPCOMING'
+        rem_start = int((start_dt - now).total_seconds())
+        rem_end = 0
+    elif start_dt <= now <= end_dt:
+        status = 'ACTIVE'
+        rem_start = 0
+        rem_end = int((end_dt - now).total_seconds())
+    else:
+        status = 'ENDED'
+        rem_start = 0
+        rem_end = 0
+
+    return {
+        'start_dt': start_dt,
+        'end_dt': end_dt,
+        'start_str': start_dt.strftime('%d %b %Y, %I:%M %p'),
+        'end_str': end_dt.strftime('%d %b %Y, %I:%M %p'),
+        'start_time_only': start_dt.strftime('%I:%M %p'),
+        'end_time_only': end_dt.strftime('%I:%M %p'),
+        'status': status,
+        'remaining_start_sec': max(0, rem_start),
+        'remaining_end_sec': max(0, rem_end)
+    }
+
 def generate_qr_code(text):
     if not QRCODE_AVAILABLE:
         return ""
@@ -588,6 +664,8 @@ def question_paper():
     if not scheduled:
         scheduled = ScheduledTest.query.first()
 
+    window_info = parse_test_window(scheduled)
+
     if not scheduled:
         test_data = {
             'title': paper.title if paper else 'AI Assessment Test',
@@ -626,7 +704,8 @@ def question_paper():
         paper=paper_dict,
         test=test_data,
         test_url=student_test_url,
-        qr_code_url=qr_code_url
+        qr_code_url=qr_code_url,
+        window_info=window_info
     )
 
 @app.route('/teacher/download-pdf-paper')
@@ -674,7 +753,7 @@ def schedule_test():
     scheduled.passcode = request.form.get('passcode', 'AI-2026').strip().upper()
 
     db.session.commit()
-    flash('Test schedule updated successfully! Students can scan QR code to join.', 'success')
+    flash('Test schedule updated successfully! Student start & end window configured.', 'success')
     return redirect(url_for('question_paper'))
 
 # ------------------------------------------------------------------------------
@@ -697,6 +776,10 @@ def student_login():
         email = request.form.get('email', '').strip().lower()
         passcode = request.form.get('passcode', '').strip().upper()
         password = request.form.get('password', '').strip()
+
+        if scheduled and scheduled.passcode and passcode != scheduled.passcode.strip().upper():
+            flash('Invalid class access passcode. Please check passcode and try again.', 'error')
+            return render_template('student_login.html', code_param=code_param, scheduled_test=test_info)
 
         user = User.query.filter_by(email=email, role='student').first()
         if user and check_password_hash(user.password_hash, password):
@@ -762,8 +845,11 @@ def student_test():
         return redirect(url_for('student_login'))
 
     paper = QuestionPaper.query.order_by(QuestionPaper.created_at.desc()).first()
+    scheduled = ScheduledTest.query.first()
+    window_info = parse_test_window(scheduled)
+
     if not paper:
-        return render_template('student_test.html', paper=None, attempt=None, submitted=False)
+        return render_template('student_test.html', paper=None, attempt=None, submitted=False, window_info=window_info)
 
     paper_dict = {
         'id': paper.id,
@@ -794,6 +880,15 @@ def student_test():
         }
 
     if request.method == 'POST':
+        # Verify test time window
+        if window_info['status'] == 'UPCOMING':
+            flash('Test has not started yet. Early submissions are not permitted.', 'error')
+            return redirect(url_for('student_test'))
+
+        if window_info['status'] == 'ENDED' and not existing_attempt:
+            flash('Test time window has closed. Late submissions are not accepted.', 'error')
+            return redirect(url_for('student_test'))
+
         score = 0
         total_possible = paper.total_marks
         user_answers = {}
@@ -866,9 +961,9 @@ def student_test():
         }
 
         flash('Test submitted successfully!', 'success')
-        return render_template('student_test.html', paper=paper_dict, attempt=attempt_dict, submitted=True)
+        return render_template('student_test.html', paper=paper_dict, attempt=attempt_dict, submitted=True, window_info=window_info)
 
-    return render_template('student_test.html', paper=paper_dict, attempt=attempt_dict, submitted=(attempt_dict is not None))
+    return render_template('student_test.html', paper=paper_dict, attempt=attempt_dict, submitted=(attempt_dict is not None), window_info=window_info)
 
 # ------------------------------------------------------------------------------
 # PAGE 6: TEACHER ANALYTICS & STUDENT PROGRESS TRACKING

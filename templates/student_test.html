@@ -19,10 +19,10 @@
             <p>{{ paper.subject }} | Total Questions: {{ paper.questions|length }} | Total Marks: {{ paper.total_marks }}</p>
         </div>
 
-        {% if not submitted %}
+        {% if not submitted and window_info and window_info.status == 'ACTIVE' %}
             <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 8px 18px; border-radius: var(--radius-full); display: flex; align-items: center; gap: 10px; color: #f87171; font-weight: 700; font-family: var(--font-heading);">
                 <i class="fa-solid fa-clock"></i>
-                <span>Time Remaining: <span id="testTimer" data-duration="{{ paper.duration_mins }}">30:00</span></span>
+                <span>Time Remaining: <span id="testTimer" data-seconds="{{ window_info.remaining_end_sec }}">--:--</span></span>
             </div>
         {% endif %}
     </div>
@@ -104,6 +104,46 @@
 
         </div>
 
+    {% elif window_info and window_info.status == 'UPCOMING' %}
+        <!-- ==================================================================== -->
+        <!-- UPCOMING TEST GATE (TEST HAS NOT STARTED YET) -->
+        <!-- ==================================================================== -->
+        <div class="glass-card" style="text-align: center; padding: 4rem 2rem; border-top: 4px solid #f59e0b;">
+            <i class="fa-solid fa-clock-rotate-left" style="font-size: 4rem; color: #f59e0b; margin-bottom: 1.25rem;"></i>
+            <h3 style="font-family: var(--font-heading); font-size: 1.8rem; color: #fff; margin-bottom: 0.5rem;">Test Has Not Started Yet</h3>
+            <p style="color: var(--text-secondary); max-width: 550px; margin: 0 auto 1.5rem; font-size: 0.98rem; line-height: 1.6;">
+                This assessment is scheduled by your educator to start on <strong style="color: #67e8f9;">{{ window_info.start_str }}</strong> and conclude at <strong style="color: #f43f5e;">{{ window_info.end_time_only }}</strong>.
+            </p>
+
+            <div style="background: rgba(10, 14, 23, 0.7); border: 1px solid var(--bg-card-border); display: inline-block; padding: 1.25rem 2.5rem; border-radius: var(--radius-md); margin-bottom: 2rem;">
+                <div style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;">Time Remaining Until Start</div>
+                <div id="startCountdown" data-seconds="{{ window_info.remaining_start_sec }}" style="font-family: var(--font-heading); font-size: 2.2rem; font-weight: 800; color: #f59e0b; letter-spacing: 2px;">
+                    Loading...
+                </div>
+            </div>
+
+            <div>
+                <button onclick="location.reload();" class="btn-primary" style="padding: 12px 28px;">
+                    <i class="fa-solid fa-rotate-right"></i> Refresh Page / Check Status
+                </button>
+            </div>
+        </div>
+
+    {% elif window_info and window_info.status == 'ENDED' %}
+        <!-- ==================================================================== -->
+        <!-- TEST ENDED GATE (TEST WINDOW HAS CLOSED) -->
+        <!-- ==================================================================== -->
+        <div class="glass-card" style="text-align: center; padding: 4rem 2rem; border-top: 4px solid #ef4444;">
+            <i class="fa-solid fa-lock" style="font-size: 4rem; color: #ef4444; margin-bottom: 1.25rem;"></i>
+            <h3 style="font-family: var(--font-heading); font-size: 1.8rem; color: #fff; margin-bottom: 0.5rem;">Test Window Has Closed</h3>
+            <p style="color: var(--text-secondary); max-width: 550px; margin: 0 auto 1.75rem; font-size: 0.98rem; line-height: 1.6;">
+                This assessment was scheduled for <strong style="color: #fff;">{{ window_info.start_str }}</strong> to <strong style="color: #f43f5e;">{{ window_info.end_time_only }}</strong>. The submission window is now closed.
+            </p>
+            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); padding: 12px 20px; border-radius: var(--radius-md); display: inline-block; color: #f87171; font-size: 0.9rem;">
+                <i class="fa-solid fa-circle-exclamation"></i> If you missed the test, please contact your course instructor to reschedule.
+            </div>
+        </div>
+
     {% else %}
         <!-- ==================================================================== -->
         <!-- ACTIVE TEST TAKING FORM -->
@@ -113,7 +153,7 @@
                 
                 <div style="background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.3); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 1.5rem; color: #67e8f9; font-size: 0.88rem; display: flex; align-items: center; gap: 10px;">
                     <i class="fa-solid fa-circle-info" style="font-size: 1.1rem;"></i>
-                    <span>Please select your choices for MCQs and type your explanations for descriptive questions before submitting.</span>
+                    <span>Test is LIVE now! Complete your answers before the time window expires at <strong style="color: #fff;">{{ window_info.end_time_only if window_info else 'End Time' }}</strong>.</span>
                 </div>
 
                 <!-- Questions Container -->
@@ -154,4 +194,53 @@
         </form>
     {% endif %}
 {% endif %}
+
+<script>
+    // Live Timer for Active Test or Countdown to Start Time
+    document.addEventListener('DOMContentLoaded', function() {
+        // 1. Start Time Countdown (if upcoming)
+        var startElement = document.getElementById('startCountdown');
+        if (startElement) {
+            var startSec = parseInt(startElement.getAttribute('data-seconds') || '0', 10);
+            function updateStartTimer() {
+                if (startSec <= 0) {
+                    startElement.innerText = "00h 00m 00s - Starting Now!";
+                    setTimeout(function() { location.reload(); }, 1500);
+                    return;
+                }
+                var hours = Math.floor(startSec / 3600);
+                var mins = Math.floor((startSec % 3600) / 60);
+                var secs = startSec % 60;
+                startElement.innerText = 
+                    (hours < 10 ? '0' : '') + hours + 'h ' +
+                    (mins < 10 ? '0' : '') + mins + 'm ' +
+                    (secs < 10 ? '0' : '') + secs + 's';
+                startSec--;
+            }
+            updateStartTimer();
+            setInterval(updateStartTimer, 1000);
+        }
+
+        // 2. Active Test Remaining Timer
+        var timerElement = document.getElementById('testTimer');
+        if (timerElement) {
+            var endSec = parseInt(timerElement.getAttribute('data-seconds') || '0', 10);
+            function updateEndTimer() {
+                if (endSec <= 0) {
+                    timerElement.innerText = "00:00 - TIME EXPIRED";
+                    alert('Test duration has expired! Submitting your responses automatically.');
+                    var form = document.getElementById('studentTestForm');
+                    if (form) form.submit();
+                    return;
+                }
+                var mins = Math.floor(endSec / 60);
+                var secs = endSec % 60;
+                timerElement.innerText = (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+                endSec--;
+            }
+            updateEndTimer();
+            setInterval(updateEndTimer, 1000);
+        }
+    });
+</script>
 {% endblock %}

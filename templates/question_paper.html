@@ -123,9 +123,39 @@
 
             <!-- Schedule Form Card -->
             <div class="glass-card">
-                <h3 style="font-family: var(--font-heading); color: #fff; font-size: 1.15rem; margin-bottom: 1rem;">
-                    <i class="fa-solid fa-calendar-check" style="color: #818cf8;"></i> Schedule Test Details
-                </h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="font-family: var(--font-heading); color: #fff; font-size: 1.15rem; margin: 0;">
+                        <i class="fa-solid fa-calendar-check" style="color: #818cf8;"></i> Schedule Test Details
+                    </h3>
+                    {% if window_info %}
+                        {% if window_info.status == 'ACTIVE' %}
+                            <span class="topic-tag" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4);">
+                                <i class="fa-solid fa-circle" style="font-size: 0.6rem; color: #10b981;"></i> LIVE NOW
+                            </span>
+                        {% elif window_info.status == 'UPCOMING' %}
+                            <span class="topic-tag" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">
+                                <i class="fa-solid fa-clock"></i> UPCOMING
+                            </span>
+                        {% else %}
+                            <span class="topic-tag" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);">
+                                <i class="fa-solid fa-lock"></i> CLOSED
+                            </span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                {% if window_info %}
+                    <div style="background: rgba(10, 14, 23, 0.6); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--bg-card-border); margin-bottom: 1.25rem; font-size: 0.85rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                            <span style="color: var(--text-secondary);">Start Time:</span>
+                            <strong style="color: #67e8f9;">{{ window_info.start_str }}</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">Calculated End Time:</span>
+                            <strong style="color: #f43f5e;">{{ window_info.end_str }}</strong>
+                        </div>
+                    </div>
+                {% endif %}
 
                 <form action="{{ url_for('schedule_test') }}" method="POST">
                     <div class="form-group">
@@ -140,7 +170,7 @@
 
                     <div class="form-group">
                         <label for="test_time">Start Time</label>
-                        <input type="time" id="test_time" name="test_time" class="form-control" value="10:00" required>
+                        <input type="time" id="test_time" name="test_time" class="form-control" value="{{ test.time if test.time and ':' in test.time else '10:00' }}" required>
                     </div>
 
                     <div class="form-group">
