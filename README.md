@@ -23,7 +23,7 @@ simplifies the evaluation process.
 
 - Backend: Python, Flask
 - PDF parsing: pypdf
-- AI: Google Gemini API (gemini-1.5-flash) for question generation, with a
+- AI: Google Gemini API (gemini-2.5-flash) for question generation, with a
   rule-based/template fallback generator when no API key is configured.
   Answer evaluation uses keyword-matching logic.
 - Database: SQLite
